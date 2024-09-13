@@ -27,7 +27,7 @@
 - 適用除外時に追加できるコメントは、Azure Resource Graph で取得がサポートされておりません。
   - 適用除外時のコメントも含めてリストを取得したい場合は、以下 Powershell スクリプトをご活用下さい
 
-```
+```powershell
 # 必要なモジュールをインポート
 Import-Module Az.Resources
 
