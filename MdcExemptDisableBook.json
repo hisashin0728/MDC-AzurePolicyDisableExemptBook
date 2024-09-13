@@ -1,0 +1,300 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Microsoft Defender for Cloud 適用除外管理ブック\r\n>　本ブックの目的\r\n\r\n本ブックは Microsoft Defender for Cloud 推奨事項（CSPM）適用除外された情報を管理するための可視化ブックです。\r\n\r\n| Ver. | Date | Comment | Updated By |\r\n| --- | ----------- | ------- | ------- |\r\n| Draft | 2024/9/13 |  ドラフト版作成中 | hnakada@microsoft.com |\r\n"
+      },
+      "name": "テキスト - 0"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "crossComponentResources": [
+          "value::tenant"
+        ],
+        "parameters": [
+          {
+            "id": "744747d4-3506-4a79-a612-178263cb9312",
+            "version": "KqlParameterItem/1.0",
+            "name": "Subscription",
+            "type": 6,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "includeAll": true,
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "value": [
+              "value::all"
+            ]
+          },
+          {
+            "id": "4ea397a2-4745-4493-a440-8f7ecd2abe2a",
+            "version": "KqlParameterItem/1.0",
+            "name": "DisableExempt",
+            "label": "無効化/除外",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| extend cause = trim(\" \", tostring(properties.status.cause))\r\n| where cause == \"Exempt\" or cause == \"OffByPolicy\"\r\n| distinct cause",
+            "crossComponentResources": [
+              "value::tenant"
+            ],
+            "typeSettings": {
+              "additionalResourceOptions": [],
+              "showDefault": false
+            },
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "queryType": 1,
+            "resourceType": "microsoft.resources/tenants",
+            "value": [
+              "Exempt",
+              "OffByPolicy"
+            ]
+          }
+        ],
+        "style": "pills",
+        "queryType": 1,
+        "resourceType": "microsoft.resources/tenants"
+      },
+      "name": "Parameter"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| extend source = tostring(properties.resourceDetails.Source)\r\n| extend resourceId =\r\n    trim(\" \", tolower(tostring(case(source =~ \"azure\", properties.resourceDetails.Id,\r\n                                    source =~ \"aws\", properties.resourceDetails.AzureResourceId,\r\n                                    source =~ \"gcp\", properties.resourceDetails.AzureResourceId,\r\n                                    extract(\"^(.+)/providers/Microsoft.Security/assessments/.+$\",1,id)))))\r\n| extend status = trim(\" \", tostring(properties.status.code))\r\n| extend cause = trim(\" \", tostring(properties.status.cause))\r\n| extend assessmentKey = tostring(name)\r\n| where cause == \"Exempt\" or cause == \"OffByPolicy\"\r\n| summarize count() by cause",
+        "size": 1,
+        "title": "適用除外/無効化ルール数",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "crossComponentResources": [
+          "{Subscription}"
+        ],
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "適用除外/無効化ルール数"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| extend cause = trim(\" \", tostring(properties.status.cause)), StatusDescription = trim(\" \", tostring(properties.status.description))\r\n| where cause == \"Exempt\"\r\n| extend StatusDescJ = case(\r\n StatusDescription == 'Exempt Mitigated', '軽減済み',\r\n StatusDescription == 'Exempt Waiver', '免除',\r\n 'Exempt')\r\n| summarize count() by StatusDescJ",
+        "size": 1,
+        "title": "適用除外の内容",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "crossComponentResources": [
+          "{Subscription}"
+        ],
+        "visualization": "piechart"
+      },
+      "customWidth": "50",
+      "name": "適用除外の内容"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "securityresources\r\n        | where type == \"microsoft.security/assessments\"\r\n        | extend source = tostring(properties.resourceDetails.Source)\r\n        | extend resourceId =\r\n            trim(\" \", tolower(tostring(case(source =~ \"azure\", properties.resourceDetails.Id,\r\n                                            source =~ \"aws\", properties.resourceDetails.AzureResourceId,\r\n                                            source =~ \"gcp\", properties.resourceDetails.AzureResourceId,\r\n                                            extract(\"^(.+)/providers/Microsoft.Security/assessments/.+$\",1,id)))))\r\n        | extend status = trim(\" \", tostring(properties.status.code))\r\n        | extend cause = trim(\" \", tostring(properties.status.cause))\r\n        | extend assessmentKey = tostring(name)\r\n//\t\t| where cause == \"Exempt\" or cause == \"OffByPolicy\"\r\n\t\t| where \"{DisableExempt:lable}\" == \"All\" or cause in ({DisableExempt})\r\n\t\t| extend ResourceName = tostring(split(resourceId,'/')[8]), RecommendationName = tostring(properties.displayName), Source = properties.resourceDetails.Source, StatusCause = tostring(properties.status.cause), StatusDescription = properties.status.description, RecommendationSeverity = tostring(properties.metadata.severity), ResourceId = properties.resourceDetails.ResourceId\r\n\t\t| project RecommendationName, RecommendationSeverity, ResourceId, StatusCause, StatusDescription, resourceGroup, Source, subscriptionId\r\n\t\t| sort by RecommendationSeverity, RecommendationName",
+        "size": 0,
+        "title": "適用除外 / 無効化リスト",
+        "showExportToExcel": true,
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "crossComponentResources": [
+          "{Subscription}"
+        ],
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "ResourceId",
+              "formatter": 13,
+              "formatOptions": {
+                "linkTarget": null,
+                "showIcon": true
+              }
+            },
+            {
+              "columnMatch": "subscriptionId",
+              "formatter": 15,
+              "formatOptions": {
+                "linkTarget": null,
+                "showIcon": true
+              }
+            }
+          ],
+          "filter": true
+        }
+      },
+      "name": "適用除外 / 無効化リスト"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| project\r\n['DisplayName'] = properties.displayName,\r\n['ResourceId'] = properties.resourceDetails.ResourceId,\r\n['StatusCode'] = properties.status.code,\r\n['StatusDescription'] = properties.status.description\r\n| where StatusDescription contains \"Exempt\"  \r\n| summarize count() by tostring(DisplayName)\r\n| order by DisplayName asc",
+        "size": 1,
+        "title": "適用除外済みのルール集計",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "crossComponentResources": [
+          "{Subscription}"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "count_",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ],
+          "sortBy": [
+            {
+              "itemKey": "$gen_heatmap_count__1",
+              "sortOrder": 2
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "DisplayName",
+              "comment": "推奨事項名称"
+            },
+            {
+              "columnId": "count_",
+              "comment": "適用除外したリソースの数"
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "$gen_heatmap_count__1",
+            "sortOrder": 2
+          }
+        ],
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "DisplayName",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "count_",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        }
+      },
+      "customWidth": "50",
+      "name": "適用除外済みのルール集計",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| extend cause = trim(\" \", tostring(properties.status.cause))\r\n| extend DisplayName =  trim(\" \", tostring(properties.displayName))\r\n| where cause == \"OffByPolicy\"\r\n| summarize count() by tostring(DisplayName)\r\n| order by DisplayName asc",
+        "size": 1,
+        "title": "無効化ルール集計",
+        "queryType": 1,
+        "resourceType": "microsoft.resourcegraph/resources",
+        "crossComponentResources": [
+          "{Subscription}"
+        ],
+        "visualization": "table",
+        "gridSettings": {
+          "formatters": [
+            {
+              "columnMatch": "count_",
+              "formatter": 8,
+              "formatOptions": {
+                "palette": "blue"
+              }
+            }
+          ],
+          "sortBy": [
+            {
+              "itemKey": "$gen_heatmap_count__1",
+              "sortOrder": 2
+            }
+          ],
+          "labelSettings": [
+            {
+              "columnId": "DisplayName",
+              "comment": "推奨事項名称"
+            },
+            {
+              "columnId": "count_",
+              "comment": "適用除外したリソースの数"
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "$gen_heatmap_count__1",
+            "sortOrder": 2
+          }
+        ],
+        "tileSettings": {
+          "showBorder": false,
+          "titleContent": {
+            "columnMatch": "DisplayName",
+            "formatter": 1
+          },
+          "leftContent": {
+            "columnMatch": "count_",
+            "formatter": 12,
+            "formatOptions": {
+              "palette": "auto"
+            },
+            "numberFormat": {
+              "unit": 17,
+              "options": {
+                "maximumSignificantDigits": 3,
+                "maximumFractionDigits": 2
+              }
+            }
+          }
+        }
+      },
+      "customWidth": "50",
+      "name": "無効化ルール集計",
+      "styleSettings": {
+        "showBorder": true
+      }
+    }
+  ],
+  "fallbackResourceIds": [
+    "Azure Security Center"
+  ],
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
