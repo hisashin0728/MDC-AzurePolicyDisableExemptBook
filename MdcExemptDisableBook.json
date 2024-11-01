@@ -4,7 +4,7 @@
     {
       "type": 1,
       "content": {
-        "json": "## Microsoft Defender for Cloud 適用除外管理ブック\r\n>　本ブックの目的\r\n\r\n本ブックは Microsoft Defender for Cloud 推奨事項（CSPM）適用除外された情報を管理するための可視化ブックです。\r\n\r\n| Ver. | Date | Comment | Updated By |\r\n| --- | ----------- | ------- | ------- |\r\n| Draft | 2024/9/13 |  ドラフト版作成中 | hnakada@microsoft.com |\r\n"
+        "json": "## Microsoft Defender for Cloud 適用除外管理ブック\r\n>　本ブックの目的\r\n\r\n本ブックは Microsoft Defender for Cloud 推奨事項（CSPM）適用除外された情報を管理するための可視化ブックです。\r\n\r\n| Ver. | Date | Comment | Updated By |\r\n| --- | ----------- | ------- | ------- |\r\n| Draft | 2024/9/13 | ドラフト版作成中 | hnakada@microsoft.com |\r\n| 1.0 | 2024/11/01 | 対象クラウドフィルター追加 | hnakada@microsoft.com |\r\n\r\n"
       },
       "name": "テキスト - 0"
     },
@@ -12,9 +12,6 @@
       "type": 9,
       "content": {
         "version": "KqlParameterItem/1.0",
-        "crossComponentResources": [
-          "value::tenant"
-        ],
         "parameters": [
           {
             "id": "744747d4-3506-4a79-a612-178263cb9312",
@@ -65,11 +62,35 @@
               "Exempt",
               "OffByPolicy"
             ]
+          },
+          {
+            "id": "ca7fab3e-e5f3-490d-9c64-a690b3a7f38b",
+            "version": "KqlParameterItem/1.0",
+            "name": "TargetCloud",
+            "label": "対象クラウド",
+            "type": 2,
+            "isRequired": true,
+            "multiSelect": true,
+            "quote": "'",
+            "delimiter": ",",
+            "typeSettings": {
+              "additionalResourceOptions": [
+                "value::all"
+              ],
+              "showDefault": false
+            },
+            "jsonData": "[\r\n    { \"value\":\"Azure\", \"label\":\"Azure\", \"selected\":true  },\r\n    { \"value\":\"AWS\", \"label\":\"AWS\" },\r\n    { \"value\":\"GCP\", \"label\":\"GCP\"}\r\n]",
+            "timeContext": {
+              "durationMs": 86400000
+            },
+            "value": [
+              "value::all"
+            ]
           }
         ],
         "style": "pills",
-        "queryType": 1,
-        "resourceType": "microsoft.resources/tenants"
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
       },
       "name": "Parameter"
     },
@@ -77,7 +98,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| extend source = tostring(properties.resourceDetails.Source)\r\n| extend resourceId =\r\n    trim(\" \", tolower(tostring(case(source =~ \"azure\", properties.resourceDetails.Id,\r\n                                    source =~ \"aws\", properties.resourceDetails.AzureResourceId,\r\n                                    source =~ \"gcp\", properties.resourceDetails.AzureResourceId,\r\n                                    extract(\"^(.+)/providers/Microsoft.Security/assessments/.+$\",1,id)))))\r\n| extend status = trim(\" \", tostring(properties.status.code))\r\n| extend cause = trim(\" \", tostring(properties.status.cause))\r\n| extend assessmentKey = tostring(name)\r\n| where cause == \"Exempt\" or cause == \"OffByPolicy\"\r\n| summarize count() by cause",
+        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| extend source = tostring(properties.resourceDetails.Source)\r\n| where \"{TargetCloud:lable}\" == \"All\" or source in ({TargetCloud})\r\n| extend resourceId =\r\n    trim(\" \", tolower(tostring(case(source =~ \"azure\", properties.resourceDetails.Id,\r\n                                    source =~ \"aws\", properties.resourceDetails.AzureResourceId,\r\n                                    source =~ \"gcp\", properties.resourceDetails.AzureResourceId,\r\n                                    extract(\"^(.+)/providers/Microsoft.Security/assessments/.+$\",1,id)))))\r\n| extend status = trim(\" \", tostring(properties.status.code))\r\n| extend cause = trim(\" \", tostring(properties.status.cause))\r\n| extend assessmentKey = tostring(name)\r\n| where cause == \"Exempt\" or cause == \"OffByPolicy\"\r\n| summarize count() by cause",
         "size": 1,
         "title": "適用除外/無効化ルール数",
         "queryType": 1,
@@ -94,7 +115,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| extend cause = trim(\" \", tostring(properties.status.cause)), StatusDescription = trim(\" \", tostring(properties.status.description))\r\n| where cause == \"Exempt\"\r\n| extend StatusDescJ = case(\r\n StatusDescription == 'Exempt Mitigated', '軽減済み',\r\n StatusDescription == 'Exempt Waiver', '免除',\r\n 'Exempt')\r\n| summarize count() by StatusDescJ",
+        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| extend source = tostring(properties.resourceDetails.Source)\r\n| where \"{TargetCloud:lable}\" == \"All\" or source in ({TargetCloud})\r\n| extend cause = trim(\" \", tostring(properties.status.cause)), StatusDescription = trim(\" \", tostring(properties.status.description))\r\n| where cause == \"Exempt\"\r\n| extend StatusDescJ = case(\r\n StatusDescription == 'Exempt Mitigated', '軽減済み',\r\n StatusDescription == 'Exempt Waiver', '免除',\r\n 'Exempt')\r\n| summarize count() by StatusDescJ",
         "size": 1,
         "title": "適用除外の内容",
         "queryType": 1,
@@ -111,7 +132,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "securityresources\r\n        | where type == \"microsoft.security/assessments\"\r\n        | extend source = tostring(properties.resourceDetails.Source)\r\n        | extend resourceId =\r\n            trim(\" \", tolower(tostring(case(source =~ \"azure\", properties.resourceDetails.Id,\r\n                                            source =~ \"aws\", properties.resourceDetails.AzureResourceId,\r\n                                            source =~ \"gcp\", properties.resourceDetails.AzureResourceId,\r\n                                            extract(\"^(.+)/providers/Microsoft.Security/assessments/.+$\",1,id)))))\r\n        | extend status = trim(\" \", tostring(properties.status.code))\r\n        | extend cause = trim(\" \", tostring(properties.status.cause))\r\n        | extend assessmentKey = tostring(name)\r\n//\t\t| where cause == \"Exempt\" or cause == \"OffByPolicy\"\r\n\t\t| where \"{DisableExempt:lable}\" == \"All\" or cause in ({DisableExempt})\r\n\t\t| extend ResourceName = tostring(split(resourceId,'/')[8]), RecommendationName = tostring(properties.displayName), Source = properties.resourceDetails.Source, StatusCause = tostring(properties.status.cause), StatusDescription = properties.status.description, RecommendationSeverity = tostring(properties.metadata.severity), ResourceId = properties.resourceDetails.ResourceId\r\n\t\t| project RecommendationName, RecommendationSeverity, ResourceId, StatusCause, StatusDescription, resourceGroup, Source, subscriptionId\r\n\t\t| sort by RecommendationSeverity, RecommendationName",
+        "query": "securityresources\r\n        | where type == \"microsoft.security/assessments\"\r\n        | extend source = tostring(properties.resourceDetails.Source)\r\n\t\t| where \"{TargetCloud:lable}\" == \"All\" or source in ({TargetCloud})\r\n        | extend resourceId =\r\n            trim(\" \", tolower(tostring(case(source =~ \"azure\", properties.resourceDetails.Id,\r\n                                            source =~ \"aws\", properties.resourceDetails.AzureResourceId,\r\n                                            source =~ \"gcp\", properties.resourceDetails.AzureResourceId,\r\n                                            extract(\"^(.+)/providers/Microsoft.Security/assessments/.+$\",1,id)))))\r\n        | extend status = trim(\" \", tostring(properties.status.code))\r\n        | extend cause = trim(\" \", tostring(properties.status.cause))\r\n        | extend assessmentKey = tostring(name)\r\n//\t\t| where cause == \"Exempt\" or cause == \"OffByPolicy\"\r\n\t\t| where \"{DisableExempt:lable}\" == \"All\" or cause in ({DisableExempt})\r\n\t\t| extend ResourceName = tostring(split(resourceId,'/')[8]), RecommendationName = tostring(properties.displayName), Source = properties.resourceDetails.Source, StatusCause = tostring(properties.status.cause), StatusDescription = properties.status.description, RecommendationSeverity = tostring(properties.metadata.severity), ResourceId = properties.resourceDetails.ResourceId\r\n\t\t| project RecommendationName, RecommendationSeverity, ResourceId, StatusCause, StatusDescription, resourceGroup, Source, subscriptionId\r\n\t\t| sort by RecommendationSeverity, RecommendationName",
         "size": 0,
         "title": "適用除外 / 無効化リスト",
         "showExportToExcel": true,
@@ -148,7 +169,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| project\r\n['DisplayName'] = properties.displayName,\r\n['ResourceId'] = properties.resourceDetails.ResourceId,\r\n['StatusCode'] = properties.status.code,\r\n['StatusDescription'] = properties.status.description\r\n| where StatusDescription contains \"Exempt\"  \r\n| summarize count() by tostring(DisplayName)\r\n| order by DisplayName asc",
+        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| extend source = tostring(properties.resourceDetails.Source)\r\n| where \"{TargetCloud:lable}\" == \"All\" or source in ({TargetCloud})\r\n| project\r\n['DisplayName'] = properties.displayName,\r\n['ResourceId'] = properties.resourceDetails.ResourceId,\r\n['StatusCode'] = properties.status.code,\r\n['StatusDescription'] = properties.status.description\r\n| where StatusDescription contains \"Exempt\"  \r\n| summarize count() by tostring(DisplayName)\r\n| order by DisplayName asc",
         "size": 1,
         "title": "適用除外済みのルール集計",
         "queryType": 1,
@@ -222,7 +243,7 @@
       "type": 3,
       "content": {
         "version": "KqlItem/1.0",
-        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| extend cause = trim(\" \", tostring(properties.status.cause))\r\n| extend DisplayName =  trim(\" \", tostring(properties.displayName))\r\n| where cause == \"OffByPolicy\"\r\n| summarize count() by tostring(DisplayName)\r\n| order by DisplayName asc",
+        "query": "securityresources\r\n| where type == \"microsoft.security/assessments\"\r\n| extend source = tostring(properties.resourceDetails.Source)\r\n| where \"{TargetCloud:lable}\" == \"All\" or source in ({TargetCloud})\r\n| extend cause = trim(\" \", tostring(properties.status.cause))\r\n| extend DisplayName =  trim(\" \", tostring(properties.displayName))\r\n| where cause == \"OffByPolicy\"\r\n| summarize count() by tostring(DisplayName)\r\n| order by DisplayName asc",
         "size": 1,
         "title": "無効化ルール集計",
         "queryType": 1,
